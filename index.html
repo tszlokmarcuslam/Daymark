@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#123f35">
+  <title>Daymark | Study planner</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="Daymark home"><span class="brand-mark">d</span><span>daymark</span></a>
+      <div class="sidebar-label">YOUR SPACE</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="week"><span class="nav-icon">▦</span>Study plan</button>
+        <button class="nav-item" data-view="timeline"><span class="nav-icon">◷</span>Course timeline</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="week-note"><span class="status-dot"></span><span><strong>One week at a time</strong><small>Your plan stays yours.</small></span></div>
+        <button class="nav-item settings-trigger" id="availabilityButton"><span class="nav-icon">⚙</span>Study hours</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="breadcrumb"><span>MY SEMESTER</span><span class="crumb-slash">/</span><strong id="viewName">Study plan</strong></div>
+        <div class="top-actions">
+          <button class="button button-quiet" id="importButton" title="Import a CSV or Canvas calendar"><span aria-hidden="true">↥</span><span>Import timeline</span></button>
+          <button class="button button-primary" id="addEventButton"><span aria-hidden="true">＋</span><span>Add event</span></button>
+        </div>
+      </header>
+
+      <div class="page-wrap">
+        <section class="page-heading">
+          <div>
+            <p class="eyebrow" id="todayLabel">YOUR WEEK, WITH ROOM TO THINK</p>
+            <h1 id="pageTitle">Study plan</h1>
+            <p class="subheading" id="pageSubtitle">A calmer view of what's coming up.</p>
+          </div>
+          <div class="week-controls" id="weekControls">
+            <button class="icon-button" id="previousWeek" aria-label="Previous 7 days" title="Previous 7 days">‹</button>
+            <span id="weekLabel" class="week-label"></span>
+            <button class="icon-button" id="nextWeek" aria-label="Next 7 days" title="Next 7 days">›</button>
+            <button class="button button-outline" id="todayButton">Today</button>
+          </div>
+        </section>
+
+        <section class="summary-strip" aria-label="Study plan summary">
+          <article class="summary-item"><span class="summary-icon icon-coral">◷</span><div><span class="summary-label">STUDY TIME</span><strong id="studyHours">0h</strong><small>planned in this view</small></div></article>
+          <article class="summary-item"><span class="summary-icon icon-yellow">⌁</span><div><span class="summary-label">UP NEXT</span><strong id="nextDeadline">Nothing due</strong><small id="nextDeadlineMeta">Add an assessment to begin</small></div></article>
+          <article class="summary-item"><span class="summary-icon icon-blue">✓</span><div><span class="summary-label">ON YOUR TIMELINE</span><strong id="eventCount">0 events</strong><small>classes and assessments</small></div></article>
+          <div class="summary-actions"><button class="button button-plan" id="buildPlanButton"><span aria-hidden="true">✳</span>Build my plan</button><span class="plan-status" id="planStatus" aria-live="polite">Ready when you are</span></div>
+        </section>
+
+        <section id="weekView" class="content-view">
+          <div class="section-heading"><div><h2>Next seven days</h2><p>Classes, deadlines and study sessions in one place.</p></div><div class="view-toggle" role="tablist" aria-label="Plan view"><button class="toggle-option selected" role="tab" aria-selected="true" data-mode="calendar">Timetable</button><button class="toggle-option" role="tab" aria-selected="false" data-mode="list">List</button></div></div>
+          <div class="week-grid" id="weekGrid"></div>
+          <div class="empty-state" id="weekEmpty" hidden><span class="empty-symbol">✳</span><strong>A little space to start</strong><p>Add your classes and assessment dates, then build a plan around them.</p><button class="button button-outline" id="emptyAddButton">Add your first event</button></div>
+          <div class="list-view" id="weekList" hidden></div>
+        </section>
+
+        <section id="timelineView" class="content-view" hidden>
+          <div class="section-heading"><div><h2>Course timeline</h2><p>Your classes and assessment dates, all together.</p></div><button class="button button-outline" id="timelineImportButton">Import file or link</button></div>
+          <div class="timeline-table-wrap"><table class="timeline-table"><thead><tr><th>EVENT</th><th>COURSE</th><th>TYPE</th><th>DATE</th><th>STUDY ESTIMATE</th><th></th></tr></thead><tbody id="timelineRows"></tbody></table></div>
+          <div class="empty-state" id="timelineEmpty" hidden><span class="empty-symbol">◷</span><strong>No course events yet</strong><p>Add an event or import a CSV to bring your semester into view.</p><button class="button button-outline" id="timelineAddButton">Add an event</button></div>
+        </section>
+
+        <footer class="page-footer"><span>Made for the space between deadlines.</span><span>Saved on this device <span class="save-dot"></span></span></footer>
+      </div>
+    </main>
+  </div>
+
+  <dialog class="modal" id="eventDialog">
+    <form id="eventForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">COURSE TIMELINE</p><h2>Add an event</h2></div><button class="icon-button close-button" type="button" data-close="eventDialog" aria-label="Close">×</button></div>
+      <label class="field-label" for="eventTitle">Event name</label><input id="eventTitle" name="title" placeholder="e.g. Research methods essay" required maxlength="90">
+      <div class="form-row"><div><label class="field-label" for="eventCourse">Course</label><input id="eventCourse" name="course" placeholder="e.g. PSYC 201" required maxlength="40"></div><div><label class="field-label" for="eventType">Event type</label><select id="eventType" name="type"><option value="assignment">Assignment</option><option value="test">Test</option><option value="exam">Exam</option><option value="class">Class</option></select></div></div>
+      <div class="form-row"><div><label class="field-label" for="eventDate">Date</label><input id="eventDate" name="date" type="date" required></div><div id="effortField"><label class="field-label" for="eventEffort">Study estimate</label><div class="input-suffix"><input id="eventEffort" name="effortHours" type="number" min="0.5" max="80" step="0.5" value="3"><span>hours</span></div></div></div>
+      <div class="form-row time-fields" id="timeFields" hidden><div><label class="field-label" for="eventStart">Starts</label><input id="eventStart" name="startTime" type="time" value="09:00"></div><div><label class="field-label" for="eventEnd">Ends</label><input id="eventEnd" name="endTime" type="time" value="10:00"></div></div>
+      <p class="form-hint" id="eventFormHint">The study estimate helps spread preparation across the days before this deadline.</p>
+      <div class="modal-actions"><button class="button button-quiet" type="button" data-close="eventDialog">Cancel</button><button class="button button-primary" type="submit">Save event</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal availability-modal" id="availabilityDialog">
+    <form id="availabilityForm" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">YOUR ROUTINE</p><h2>Study hours</h2><p class="modal-description">Set a daily study limit. Daymark will fit sessions around your classes.</p></div><button class="icon-button close-button" type="button" data-close="availabilityDialog" aria-label="Close">×</button></div>
+      <div class="availability-list" id="availabilityList"></div>
+      <div class="modal-actions"><button class="button button-quiet" type="button" data-close="availabilityDialog">Cancel</button><button class="button button-primary" type="submit">Save hours</button></div>
+    </form>
+  </dialog>
+  <dialog class="modal import-modal" id="importDialog">
+    <div class="modal-heading"><div><p class="eyebrow">COURSE TIMELINE</p><h2>Import your calendar</h2><p class="modal-description">Bring in a Canvas calendar file or feed link. CSV imports still work too.</p></div><button class="icon-button close-button" type="button" data-close="importDialog" aria-label="Close">×</button></div>
+    <label class="field-label" for="calendarFile">Choose a calendar or CSV file</label>
+    <input class="import-file" id="calendarFile" type="file" accept=".ics,.ical,.csv,text/calendar,text/csv">
+    <p class="import-note">Canvas: Calendar → Calendar Feed, then download the .ics file. The file is read in your browser.</p>
+    <div class="import-divider"><span>OR IMPORT A FEED LINK</span></div>
+    <form id="feedForm">
+      <label class="field-label" for="feedUrl">Canvas calendar feed URL</label>
+      <div class="import-url-row"><input id="feedUrl" type="url" placeholder="https://canvas.example.edu/feeds/..." autocomplete="off" required><button class="button button-primary" type="submit">Import link</button></div>
+      <p class="import-note">The link is not saved. If Canvas blocks browser access, download its .ics file and import that instead.</p>
+    </form>
+    <div class="modal-actions"><button class="button button-quiet" type="button" data-close="importDialog">Done</button></div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

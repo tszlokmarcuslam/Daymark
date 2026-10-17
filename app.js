@@ -86,7 +86,7 @@ function id() {
 }
 if (!Array.isArray(state.events)) state.events = [];
 if (!Array.isArray(state.availability) || state.availability.length !== 7) state.availability = [...DEFAULT_AVAILABILITY];
-if (!['light', 'dark', 'system', 'ubuntu', 'custom'].includes(state.theme)) state.theme = 'system';
+if (!['light', 'dark', 'system', 'custom'].includes(state.theme)) state.theme = 'system';
 if (!state.themeColors || !/^#[\da-f]{6}$/i.test(state.themeColors.background) || !/^#[\da-f]{6}$/i.test(state.themeColors.accent)) state.themeColors = { background: '#f6f7f3', accent: '#123f35' };
 let demoCleanupDone = false;
 try { demoCleanupDone = localStorage.getItem(STORAGE.demoCleanup) === 'done'; }
@@ -108,22 +108,30 @@ function applyTheme(theme) {
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme === 'custom' ? 'custom' : theme;
   const root = document.documentElement;
-  for (const property of ['--canvas', '--paper', '--line', '--ink', '--muted', '--green', '--green-2', '--accent-ink']) root.style.removeProperty(property);
+  for (const property of ['--canvas', '--paper', '--line', '--ink', '--muted', '--green', '--green-2', '--accent-ink', '--event-surface', '--event-ink', '--event-muted', '--event-border', '--event-badge-surface', '--event-badge-ink']) root.style.removeProperty(property);
   root.dataset.theme = resolvedTheme;
-  document.querySelector('meta[name="theme-color"]').content = resolvedTheme === 'custom' ? state.themeColors.accent : resolvedTheme === 'ubuntu' ? '#2c001e' : resolvedTheme === 'dark' ? '#111a15' : '#123f35';
+  document.querySelector('meta[name="theme-color"]').content = resolvedTheme === 'custom' ? state.themeColors.accent : resolvedTheme === 'dark' ? '#111a15' : '#123f35';
   if (resolvedTheme === 'custom') {
     const background = state.themeColors.background;
     const accent = state.themeColors.accent;
-    const backgroundIsLight = colorLuminance(background) > 0.18;
-    const foreground = backgroundIsLight ? '#1e2b27' : '#edf3ee';
+    const foreground = contrastText(background);
+    const eventSurface = mixHex(background, accent, 0.12);
+    const eventInk = contrastText(eventSurface);
+    const badgeSurface = mixHex(eventSurface, accent, 0.18);
     root.style.setProperty('--canvas', background);
     root.style.setProperty('--paper', mixHex(background, foreground, 0.06));
     root.style.setProperty('--line', mixHex(background, foreground, 0.16));
     root.style.setProperty('--ink', foreground);
-    root.style.setProperty('--muted', mixHex(background, foreground, 0.62));
+    root.style.setProperty('--muted', mixHex(background, foreground, 0.72));
     root.style.setProperty('--green', accent);
     root.style.setProperty('--green-2', mixHex(accent, '#000000', 0.18));
-    root.style.setProperty('--accent-ink', colorLuminance(accent) > 0.18 ? '#17251d' : '#ffffff');
+    root.style.setProperty('--accent-ink', contrastText(accent));
+    root.style.setProperty('--event-surface', eventSurface);
+    root.style.setProperty('--event-ink', eventInk);
+    root.style.setProperty('--event-muted', mixHex(eventSurface, eventInk, 0.72));
+    root.style.setProperty('--event-border', mixHex(eventSurface, eventInk, 0.2));
+    root.style.setProperty('--event-badge-surface', badgeSurface);
+    root.style.setProperty('--event-badge-ink', contrastText(badgeSurface));
   }
   document.querySelectorAll('input[name="theme"]').forEach(input => {
     input.checked = input.value === theme;
@@ -135,6 +143,13 @@ function applyTheme(theme) {
 function colorLuminance(hex) {
   const channels = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
   return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+function contrastText(background) {
+  const luminance = colorLuminance(background);
+  const dark = '#17251d';
+  const darkContrast = (luminance + 0.05) / (colorLuminance(dark) + 0.05);
+  const lightContrast = 1.05 / (luminance + 0.05);
+  return darkContrast >= lightContrast ? dark : '#ffffff';
 }
 function mixHex(first, second, amount) {
   const firstChannels = first.slice(1).match(/../g).map(value => parseInt(value, 16));

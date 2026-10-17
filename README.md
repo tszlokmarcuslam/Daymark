@@ -21,4 +21,4 @@ This project is ready for GitHub Pages through `.github/workflows/pages.yml`. To
 
 Calendar files are read locally in your browser. Feed links are fetched directly without credentials and are never saved. Canvas or the browser may block direct feed access with cross-origin rules; if that happens, download the `.ics` file from Canvas and import the file instead. Re-imported feed events are deduplicated. The planner is a first-pass heuristic; review and adjust its sessions to match your workload and preferences.
 
-Appearance can be set to Light, Dark, System, Ubuntu, or Custom under **Settings**. Custom lets each device choose its own background and accent colors. Preferences are stored on that device and are not synced.
+Appearance can be set to Light, Dark, System, or Custom under **Settings**. Custom lets each device choose its own background and accent colors; event cards and labels choose contrasting text colors for those surfaces. Preferences are stored on that device and are not synced.

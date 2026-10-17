@@ -4,8 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#123f35">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Daymark">
   <title>Daymark | Study planner</title>
   <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="theme.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="app-icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="app-icon-192.png">
 </head>
 <body>
   <div class="app-shell">
@@ -18,7 +25,8 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="week-note"><span class="status-dot"></span><span><strong>One week at a time</strong><small>Your plan stays yours.</small></span></div>
-        <button class="nav-item settings-trigger" id="availabilityButton"><span class="nav-icon">⚙</span>Study hours</button>
+        <button class="nav-item settings-trigger" id="settingsButton"><span class="nav-icon">☷</span>Settings</button>
+        <button class="nav-item settings-trigger" id="availabilityButton"><span class="nav-icon">◷</span>Study hours</button>
       </div>
     </aside>
 
@@ -89,6 +97,30 @@
       <div class="availability-list" id="availabilityList"></div>
       <div class="modal-actions"><button class="button button-quiet" type="button" data-close="availabilityDialog">Cancel</button><button class="button button-primary" type="submit">Save hours</button></div>
     </form>
+  </dialog>
+  <dialog class="modal settings-modal" id="settingsDialog">
+    <div class="modal-heading"><div><p class="eyebrow">PREFERENCES</p><h2>Settings</h2><p class="modal-description">Choose how Daymark looks on this device.</p></div><button class="icon-button close-button" type="button" data-close="settingsDialog" aria-label="Close">×</button></div>
+    <fieldset class="theme-fieldset">
+      <legend>Appearance</legend>
+      <div class="theme-options">
+        <label class="theme-option"><input type="radio" name="theme" value="light"><span>Light</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="system"><span>System</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="ubuntu"><span>Ubuntu</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="custom"><span>Custom</span></label>
+      </div>
+      <p class="form-hint">System follows your device’s appearance setting.</p>
+      <div class="custom-theme-fields" id="customThemeFields" hidden>
+        <label class="color-setting" for="themeBackground"><span>Main background</span><input id="themeBackground" type="color" value="#f6f7f3"></label>
+        <label class="color-setting" for="themeAccent"><span>Accent color</span><input id="themeAccent" type="color" value="#123f35"></label>
+      </div>
+    </fieldset>
+    <section class="install-section" aria-labelledby="installHeading">
+      <div class="install-heading"><h3 id="installHeading">Install Daymark</h3><span>ON THIS DEVICE</span></div>
+      <p class="install-description">Install from your browser menu. On iPhone or iPad, use Share → Add to Home Screen.</p>
+      <button class="button button-outline" id="installAppButton" type="button" hidden>Install app</button>
+    </section>
+    <div class="modal-actions"><button class="button button-primary" type="button" data-close="settingsDialog">Done</button></div>
   </dialog>
   <dialog class="modal import-modal" id="importDialog">
     <div class="modal-heading"><div><p class="eyebrow">COURSE TIMELINE</p><h2>Import your calendar</h2><p class="modal-description">Bring in a Canvas calendar file or feed link. CSV imports still work too.</p></div><button class="icon-button close-button" type="button" data-close="importDialog" aria-label="Close">×</button></div>

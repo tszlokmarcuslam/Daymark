@@ -4,7 +4,7 @@ A small, browser-only planner that brings classes, assignment deadlines, tests a
 
 ## Run it
 
-Open `index.html` in a modern browser. No installation, build step, account or API key is needed. Your timeline and preferences are stored in that browser's local storage.
+Open `index.html` in a modern browser for the website version. No package install or account is needed. To install Daymark as an app and use it offline, open the hosted HTTPS site (or `localhost`) in a supported browser, then use its **Install app** command. On iPhone or iPad, use **Share → Add to Home Screen**. The service worker caches only the app shell; event data is saved in local storage on that device and is never uploaded or synced. Clearing the browser/app data removes those events.
 
 ## Publish it
 
@@ -20,3 +20,5 @@ This project is ready for GitHub Pages through `.github/workflows/pages.yml`. To
 - Import a Canvas `.ics` file or paste a Canvas Calendar Feed URL from **Import timeline**. Timed events are treated as classes unless their title identifies an assignment, quiz, test or exam. Course names and study estimates may need review after importing.
 
 Calendar files are read locally in your browser. Feed links are fetched directly without credentials and are never saved. Canvas or the browser may block direct feed access with cross-origin rules; if that happens, download the `.ics` file from Canvas and import the file instead. Re-imported feed events are deduplicated. The planner is a first-pass heuristic; review and adjust its sessions to match your workload and preferences.
+
+Appearance can be set to Light, Dark, System, Ubuntu, or Custom under **Settings**. Custom lets each device choose its own background and accent colors. Preferences are stored on that device and are not synced.

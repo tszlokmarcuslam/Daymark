@@ -1,4 +1,4 @@
-const STORAGE = { events: 'daymark.events.v1', sessions: 'daymark.sessions.v1', availability: 'daymark.availability.v1', demoCleanup: 'daymark.demo-cleanup.v1' };
+const STORAGE = { events: 'daymark.events.v1', sessions: 'daymark.sessions.v1', availability: 'daymark.availability.v1', theme: 'daymark.theme.v1', themeColors: 'daymark.theme-colors.v1', demoCleanup: 'daymark.demo-cleanup.v1' };
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const SHORT_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const DEFAULT_AVAILABILITY = [90, 90, 90, 90, 90, 90, 120];
@@ -13,6 +13,8 @@ const state = {
   events: readStorage(STORAGE.events, []),
   sessions: readStorage(STORAGE.sessions, []),
   availability: readStorage(STORAGE.availability, DEFAULT_AVAILABILITY),
+  theme: readStorage(STORAGE.theme, 'system'),
+  themeColors: readStorage(STORAGE.themeColors, { background: '#f6f7f3', accent: '#123f35' }),
   offset: 0,
   view: 'week',
   mode: 'calendar'
@@ -32,6 +34,8 @@ function saveStorage() {
     localStorage.setItem(STORAGE.events, JSON.stringify(state.events));
     localStorage.setItem(STORAGE.sessions, JSON.stringify(state.sessions));
     localStorage.setItem(STORAGE.availability, JSON.stringify(state.availability));
+    localStorage.setItem(STORAGE.theme, JSON.stringify(state.theme));
+    localStorage.setItem(STORAGE.themeColors, JSON.stringify(state.themeColors));
   } catch {
     showToast('Browser storage is unavailable. Your changes may not persist after closing this page.');
   }
@@ -82,6 +86,8 @@ function id() {
 }
 if (!Array.isArray(state.events)) state.events = [];
 if (!Array.isArray(state.availability) || state.availability.length !== 7) state.availability = [...DEFAULT_AVAILABILITY];
+if (!['light', 'dark', 'system', 'ubuntu', 'custom'].includes(state.theme)) state.theme = 'system';
+if (!state.themeColors || !/^#[\da-f]{6}$/i.test(state.themeColors.background) || !/^#[\da-f]{6}$/i.test(state.themeColors.accent)) state.themeColors = { background: '#f6f7f3', accent: '#123f35' };
 let demoCleanupDone = false;
 try { demoCleanupDone = localStorage.getItem(STORAGE.demoCleanup) === 'done'; }
 catch { demoCleanupDone = true; }
@@ -95,135 +101,171 @@ if (!demoCleanupDone) {
   try { localStorage.setItem(STORAGE.demoCleanup, 'done'); }
   catch { /* Keep the current session free of sample data if storage is unavailable. */ }
 }
+applyTheme(state.theme);
 
-function generatePlan() {
-  const assessments = state.events
-    .filter(event => event.type !== 'class')
-    .sort((first, second) => first.date.localeCompare(second.date));
-  const sessions = [];
-  const usedMinutes = new Map();
-  const starts = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00', '20:30'];
-  for (const task of assessments) {
-    let remaining = Math.max(30, Number(task.effortHours || 1) * 60);
-    const firstDay = task.date < addDays(localDate(), 1) ? task.date : (task.date > addDays(localDate(), 14) ? addDays(task.date, -14) : localDate());
-    for (let day = firstDay; day < task.date && remaining > 0; day = addDays(day, 1)) {
-      const weekday = parseLocalDate(day).getDay();
-      const dailyLimit = Math.max(0, Number(state.availability[weekday]) || 0);
-      let scheduledToday = usedMinutes.get(day) || 0;
-      while (remaining > 0 && scheduledToday < dailyLimit) {
-        const duration = Math.min(60, remaining, dailyLimit - scheduledToday);
-        const startTime = starts.find(start => isSlotFree(day, start, duration, sessions));
-        if (!startTime) break;
-        sessions.push({
-          id: id(), sourceId: task.id, title: task.title, course: task.course,
-          type: 'study', date: day, startTime, endTime: addMinutes(startTime, duration), duration
-        });
-        remaining -= duration;
-        scheduledToday += duration;
-        usedMinutes.set(day, scheduledToday);
-      }
-    }
-    task.unscheduledMinutes = remaining;
+function applyTheme(theme) {
+  const resolvedTheme = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme === 'custom' ? 'custom' : theme;
+  const root = document.documentElement;
+  for (const property of ['--canvas', '--paper', '--line', '--ink', '--muted', '--green', '--green-2', '--accent-ink']) root.style.removeProperty(property);
+  root.dataset.theme = resolvedTheme;
+  document.querySelector('meta[name="theme-color"]').content = resolvedTheme === 'custom' ? state.themeColors.accent : resolvedTheme === 'ubuntu' ? '#2c001e' : resolvedTheme === 'dark' ? '#111a15' : '#123f35';
+  if (resolvedTheme === 'custom') {
+    const background = state.themeColors.background;
+    const accent = state.themeColors.accent;
+    const backgroundIsLight = colorLuminance(background) > 0.18;
+    const foreground = backgroundIsLight ? '#1e2b27' : '#edf3ee';
+    root.style.setProperty('--canvas', background);
+    root.style.setProperty('--paper', mixHex(background, foreground, 0.06));
+    root.style.setProperty('--line', mixHex(background, foreground, 0.16));
+    root.style.setProperty('--ink', foreground);
+    root.style.setProperty('--muted', mixHex(background, foreground, 0.62));
+    root.style.setProperty('--green', accent);
+    root.style.setProperty('--green-2', mixHex(accent, '#000000', 0.18));
+    root.style.setProperty('--accent-ink', colorLuminance(accent) > 0.18 ? '#17251d' : '#ffffff');
   }
-  state.sessions = sessions;
-  saveStorage();
-  render();
-  const unfinished = assessments.reduce((total, item) => total + (item.unscheduledMinutes || 0), 0);
-  showToast(unfinished ? `Plan built. ${formatDuration(unfinished)} still needs time; consider adding study hours or adjusting estimates.` : 'Your study plan is ready. Sessions avoid your scheduled classes.');
+  document.querySelectorAll('input[name="theme"]').forEach(input => {
+    input.checked = input.value === theme;
+  });
+  document.getElementById('customThemeFields').hidden = theme !== 'custom';
+  document.getElementById('themeBackground').value = state.themeColors.background;
+  document.getElementById('themeAccent').value = state.themeColors.accent;
 }
-function addMinutes(time, minutes) {
-  const [hours, mins] = time.split(':').map(Number);
-  const result = hours * 60 + mins + minutes;
-  return `${String(Math.floor(result / 60)).padStart(2, '0')}:${String(result % 60).padStart(2, '0')}`;
+function colorLuminance(hex) {
+  const channels = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
 }
-function overlaps(startA, endA, startB, endB) {
-  return startA < endB && startB < endA;
+function mixHex(first, second, amount) {
+  const firstChannels = first.slice(1).match(/../g).map(value => parseInt(value, 16));
+  const secondChannels = second.slice(1).match(/../g).map(value => parseInt(value, 16));
+  return `#${firstChannels.map((value, index) => Math.round(value * (1 - amount) + secondChannels[index] * amount).toString(16).padStart(2, '0')).join('')}`;
 }
-function isSlotFree(day, start, duration, sessions) {
-  const end = addMinutes(start, duration);
-  const fixedEvents = state.events.filter(event => event.type === 'class' && event.date === day && event.startTime && event.endTime);
-  const planned = sessions.filter(session => session.date === day);
-  return ![...fixedEvents, ...planned].some(event => overlaps(start, end, event.startTime, event.endTime));
-}
-function formatDuration(minutes) {
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return `${hours ? `${hours}h` : ''}${hours && remainder ? ' ' : ''}${remainder ? `${remainder}m` : ''}` || '0m';
-}
-function formatTime(value) {
-  if (!value) return '';
-  const [hour, minute] = value.split(':').map(Number);
-  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: minute ? '2-digit' : undefined }).format(new Date(2000, 0, 1, hour, minute));
-}
-function eventsOn(day) {
-  return [
-    ...state.events.filter(event => event.date === day),
-    ...state.sessions.filter(session => session.date === day)
-  ].sort((a, b) => (a.startTime || (a.type === 'study' ? '16:00' : '12:00')).localeCompare(b.startTime || (b.type === 'study' ? '16:00' : '12:00')));
-}
-function render() {
-  renderHeading();
-  renderSummary();
-  renderWeek();
-  renderTimeline();
-  renderAvailability();
-}
-function renderHeading() {
-  const start = dateAtOffset(state.offset);
-  const end = addDays(start, 6);
-  document.getElementById('weekLabel').textContent = `${dateLabel(start)} – ${dateLabel(end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  document.getElementById('todayLabel').textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()).toUpperCase();
-  const isTimeline = state.view === 'timeline';
-  document.getElementById('viewName').textContent = isTimeline ? 'Course timeline' : 'Study plan';
-  document.getElementById('pageTitle').textContent = isTimeline ? 'Course timeline' : 'Study plan';
-  document.getElementById('pageSubtitle').textContent = isTimeline ? 'A clear view of classes, tests and due dates.' : 'A calmer view of what’s coming up.';
-  document.getElementById('weekControls').hidden = isTimeline;
-  document.getElementById('weekView').hidden = isTimeline;
-  document.getElementById('timelineView').hidden = !isTimeline;
-  document.querySelectorAll('.nav-item[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === state.view));
-}
-function renderSummary() {
-  const start = dateAtOffset(state.offset);
-  const end = addDays(start, 6);
-  const sessions = state.sessions.filter(session => session.date >= start && session.date <= end);
-  const minutes = sessions.reduce((sum, session) => sum + session.duration, 0);
-  document.getElementById('studyHours').textContent = `${(minutes / 60).toFixed(minutes % 60 ? 1 : 0)}h`;
-  const upcoming = state.events.filter(event => event.type !== 'class' && event.date >= localDate()).sort((a, b) => a.date.localeCompare(b.date))[0];
-  document.getElementById('nextDeadline').textContent = upcoming ? upcoming.title : 'Nothing due';
-  document.getElementById('nextDeadlineMeta').textContent = upcoming ? `${upcoming.course} · ${dateDistance(upcoming.date)}` : 'Add an assessment to begin';
-  document.getElementById('eventCount').textContent = `${state.events.length} ${state.events.length === 1 ? 'event' : 'events'}`;
-}
-function renderWeek() {
-  const grid = document.getElementById('weekGrid');
-  const start = dateAtOffset(state.offset);
-  const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
-  const visibleItems = days.some(day => eventsOn(day).length);
-  document.getElementById('weekEmpty').hidden = visibleItems;
-  grid.hidden = !visibleItems || state.mode !== 'calendar';
-  document.getElementById('weekList').hidden = !visibleItems || state.mode !== 'list';
-  grid.innerHTML = days.map(day => {
-    const date = parseLocalDate(day);
-    const items = eventsOn(day);
-    return `<article class="day-column ${day === localDate() ? 'is-today' : ''}"><header class="day-head"><span class="day-name">${SHORT_DAYS[date.getDay()]}</span><span class="day-number">${date.getDate()}</span></header><div class="day-items">${items.length ? items.map(renderEventCard).join('') : '<div class="day-empty">Open</div>'}</div></article>`;
-  }).join('');
-  document.getElementById('weekList').innerHTML = days.flatMap(day => eventsOn(day).map(event => `<article class="list-row"><span class="list-date">${dateLabel(day, { weekday: 'short', month: 'short', day: 'numeric' })}${day === localDate() ? ' · Today' : ''}</span><div><strong>${escapeHTML(event.title)}</strong><small>${escapeHTML(event.course)}${event.type === 'study' ? ` · ${formatDuration(event.duration)}` : ''}</small></div><span class="type-pill type-${event.type}">${event.type === 'study' ? 'Study session' : escapeHTML(event.type)}</span><span class="list-meta">${event.startTime ? formatTime(event.startTime) : dateDistance(day)}</span></article>`)).join('');
-}
-function renderEventCard(event) {
-  const isStudy = event.type === 'study';
-  const time = event.startTime ? `${formatTime(event.startTime)}${event.endTime ? ` – ${formatTime(event.endTime)}` : ''}` : (isStudy ? '' : 'Due today');
-  const label = isStudy ? 'Study session' : event.type;
-  return `<div class="event-card ${event.type}"><span class="event-time">${escapeHTML(time || (isStudy ? formatDuration(event.duration) : ''))}</span><strong>${escapeHTML(event.title)}</strong><span class="event-course">${escapeHTML(event.course)}</span><span class="event-type">${escapeHTML(label)}${isStudy ? ` · ${formatDuration(event.duration)}` : ''}</span></div>`;
-}
-function renderTimeline() {
-  const rows = document.getElementById('timelineRows');
-  const events = [...state.events].sort((a, b) => a.date.localeCompare(b.date));
-  document.getElementById('timelineEmpty').hidden = events.length > 0;
-  document.querySelector('.timeline-table-wrap').hidden = events.length === 0;
-  rows.innerHTML = events.map(event => `<tr><td class="timeline-title">${escapeHTML(event.title)}</td><td>${escapeHTML(event.course)}</td><td><span class="type-pill type-${event.type}">${escapeHTML(event.type)}</span></td><td>${dateLabel(event.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}${event.type === 'class' && event.startTime ? `<br><small>${formatTime(event.startTime)}${event.endTime ? ` – ${formatTime(event.endTime)}` : ''}</small>` : ''}</td><td>${event.type === 'class' ? '—' : `${Number(event.effortHours || 0)} hours`}</td><td><button class="delete-event" data-delete="${escapeHTML(event.id)}" aria-label="Delete ${escapeHTML(event.title)}" title="Delete event">×</button></td></tr>`).join('');
-}
-function renderAvailability() {
-  document.getElementById('availabilityList').innerHTML = DAYS.map((day, index) => `<div class="availability-row"><label for="availability-${index}">${day}</label><select id="availability-${index}" name="day-${index}"><option value="0" ${state.availability[index] === 0 ? 'selected' : ''}>Unavailable</option><option value="60" ${state.availability[index] === 60 ? 'selected' : ''}>1 hour</option><option value="90" ${state.availability[index] === 90 ? 'selected' : ''}>1.5 hours</option><option value="120" ${state.availability[index] === 120 ? 'selected' : ''}>2 hours</option><option value="180" ${state.availability[index] === 180 ? 'selected' : ''}>3 hours</option></select></div>`).join('');
-}
+  function generatePlan() {
+    const assessments = state.events
+      .filter(event => event.type !== 'class')
+      .sort((first, second) => first.date.localeCompare(second.date));
+    const sessions = [];
+    const usedMinutes = new Map();
+    const starts = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00', '20:30'];
+    for (const task of assessments) {
+      let remaining = Math.max(30, Number(task.effortHours || 1) * 60);
+      const firstDay = task.date < addDays(localDate(), 1) ? task.date : (task.date > addDays(localDate(), 14) ? addDays(task.date, -14) : localDate());
+      for (let day = firstDay; day < task.date && remaining > 0; day = addDays(day, 1)) {
+        const weekday = parseLocalDate(day).getDay();
+        const dailyLimit = Math.max(0, Number(state.availability[weekday]) || 0);
+        let scheduledToday = usedMinutes.get(day) || 0;
+        while (remaining > 0 && scheduledToday < dailyLimit) {
+          const duration = Math.min(60, remaining, dailyLimit - scheduledToday);
+          const startTime = starts.find(start => isSlotFree(day, start, duration, sessions));
+          if (!startTime) break;
+          sessions.push({ id: id(), sourceId: task.id, title: task.title, course: task.course, type: 'study', date: day, startTime, endTime: addMinutes(startTime, duration), duration });
+          remaining -= duration;
+          scheduledToday += duration;
+          usedMinutes.set(day, scheduledToday);
+        }
+      }
+      task.unscheduledMinutes = remaining;
+    }
+    state.sessions = sessions;
+    saveStorage();
+    render();
+    const unfinished = assessments.reduce((total, item) => total + (item.unscheduledMinutes || 0), 0);
+    showToast(unfinished ? `Plan built. ${formatDuration(unfinished)} still needs time; adjust study hours or estimates.` : 'Your study plan is ready. Sessions avoid your scheduled classes.');
+  }
+  function addMinutes(time, minutes) {
+    const [hours, mins] = time.split(':').map(Number);
+    const result = hours * 60 + mins + minutes;
+    return `${String(Math.floor(result / 60)).padStart(2, '0')}:${String(result % 60).padStart(2, '0')}`;
+  }
+  function overlaps(startA, endA, startB, endB) {
+    return startA < endB && startB < endA;
+  }
+  function isSlotFree(day, start, duration, sessions) {
+    const end = addMinutes(start, duration);
+    const classes = state.events.filter(event => event.type === 'class' && event.date === day && event.startTime && event.endTime);
+    const planned = sessions.filter(session => session.date === day);
+    return ![...classes, ...planned].some(event => overlaps(start, end, event.startTime, event.endTime));
+  }
+  function formatDuration(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return `${hours ? `${hours}h` : ''}${hours && remainder ? ' ' : ''}${remainder ? `${remainder}m` : ''}` || '0m';
+  }
+  function formatTime(value) {
+    if (!value) return '';
+    const [hour, minute] = value.split(':').map(Number);
+    return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: minute ? '2-digit' : undefined }).format(new Date(2000, 0, 1, hour, minute));
+  }
+  function eventsOn(day) {
+    return [
+      ...state.events.filter(event => event.date === day),
+      ...state.sessions.filter(session => session.date === day)
+    ].sort((first, second) => (first.startTime || (first.type === 'study' ? '16:00' : '12:00')).localeCompare(second.startTime || (second.type === 'study' ? '16:00' : '12:00')));
+  }
+  function render() {
+    renderHeading();
+    renderSummary();
+    renderWeek();
+    renderTimeline();
+    renderAvailability();
+  }
+  function renderHeading() {
+    const start = dateAtOffset(state.offset);
+    const end = addDays(start, 6);
+    const timeline = state.view === 'timeline';
+    document.getElementById('weekLabel').textContent = `${dateLabel(start)} – ${dateLabel(end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    document.getElementById('todayLabel').textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()).toUpperCase();
+    document.getElementById('viewName').textContent = timeline ? 'Course timeline' : 'Study plan';
+    document.getElementById('pageTitle').textContent = timeline ? 'Course timeline' : 'Study plan';
+    document.getElementById('pageSubtitle').textContent = timeline ? 'A clear view of classes, tests and due dates.' : 'A calmer view of what’s coming up.';
+    document.getElementById('weekControls').hidden = timeline;
+    document.getElementById('weekView').hidden = timeline;
+    document.getElementById('timelineView').hidden = !timeline;
+    document.querySelectorAll('.nav-item[data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === state.view));
+  }
+  function renderSummary() {
+    const start = dateAtOffset(state.offset);
+    const end = addDays(start, 6);
+    const sessions = state.sessions.filter(session => session.date >= start && session.date <= end);
+    const minutes = sessions.reduce((total, session) => total + session.duration, 0);
+    document.getElementById('studyHours').textContent = `${(minutes / 60).toFixed(minutes % 60 ? 1 : 0)}h`;
+    const upcoming = state.events.filter(event => event.type !== 'class' && event.date >= localDate()).sort((first, second) => first.date.localeCompare(second.date))[0];
+    document.getElementById('nextDeadline').textContent = upcoming ? upcoming.title : 'Nothing due';
+    document.getElementById('nextDeadlineMeta').textContent = upcoming ? `${upcoming.course} · ${dateDistance(upcoming.date)}` : 'Add an assessment to begin';
+    document.getElementById('eventCount').textContent = `${state.events.length} ${state.events.length === 1 ? 'event' : 'events'}`;
+  }
+  function renderWeek() {
+    const grid = document.getElementById('weekGrid');
+    const start = dateAtOffset(state.offset);
+    const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
+    const hasItems = days.some(day => eventsOn(day).length);
+    document.getElementById('weekEmpty').hidden = hasItems;
+    grid.hidden = !hasItems || state.mode !== 'calendar';
+    document.getElementById('weekList').hidden = !hasItems || state.mode !== 'list';
+    grid.innerHTML = days.map(day => {
+      const date = parseLocalDate(day);
+      const items = eventsOn(day);
+      return `<article class="day-column ${day === localDate() ? 'is-today' : ''}"><header class="day-head"><span class="day-name">${SHORT_DAYS[date.getDay()]}</span><span class="day-number">${date.getDate()}</span></header><div class="day-items">${items.length ? items.map(renderEventCard).join('') : '<div class="day-empty">Open</div>'}</div></article>`;
+    }).join('');
+    document.getElementById('weekList').innerHTML = days.flatMap(day => eventsOn(day).map(event => `<article class="list-row"><span class="list-date">${dateLabel(day, { weekday: 'short', month: 'short', day: 'numeric' })}${day === localDate() ? ' · Today' : ''}</span><div><strong>${escapeHTML(event.title)}</strong><small>${escapeHTML(event.course)}${event.type === 'study' ? ` · ${formatDuration(event.duration)}` : ''}</small></div><span class="type-pill type-${event.type}">${event.type === 'study' ? 'Study session' : escapeHTML(event.type)}</span><span class="list-meta">${event.startTime ? formatTime(event.startTime) : dateDistance(day)}</span></article>`)).join('');
+  }
+  function renderEventCard(event) {
+    const isStudy = event.type === 'study';
+    const time = event.startTime ? `${formatTime(event.startTime)}${event.endTime ? ` – ${formatTime(event.endTime)}` : ''}` : (isStudy ? '' : 'Due today');
+    const label = isStudy ? 'Study session' : event.type;
+    return `<div class="event-card ${event.type}"><span class="event-time">${escapeHTML(time || (isStudy ? formatDuration(event.duration) : ''))}</span><strong>${escapeHTML(event.title)}</strong><span class="event-course">${escapeHTML(event.course)}</span><span class="event-type">${escapeHTML(label)}${isStudy ? ` · ${formatDuration(event.duration)}` : ''}</span></div>`;
+  }
+  function renderTimeline() {
+    const rows = document.getElementById('timelineRows');
+    const events = [...state.events].sort((first, second) => first.date.localeCompare(second.date));
+    document.getElementById('timelineEmpty').hidden = events.length > 0;
+    document.querySelector('.timeline-table-wrap').hidden = events.length === 0;
+    rows.innerHTML = events.map(event => `<tr><td class="timeline-title">${escapeHTML(event.title)}</td><td>${escapeHTML(event.course)}</td><td><span class="type-pill type-${event.type}">${escapeHTML(event.type)}</span></td><td>${dateLabel(event.date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}${event.type === 'class' && event.startTime ? `<br><small>${formatTime(event.startTime)}${event.endTime ? ` – ${formatTime(event.endTime)}` : ''}</small>` : ''}</td><td>${event.type === 'class' ? '—' : `${Number(event.effortHours || 0)} hours`}</td><td><button class="delete-event" data-delete="${escapeHTML(event.id)}" aria-label="Delete ${escapeHTML(event.title)}" title="Delete event">×</button></td></tr>`).join('');
+  }
+  function renderAvailability() {
+    document.getElementById('availabilityList').innerHTML = DAYS.map((day, index) => `<div class="availability-row"><label for="availability-${index}">${day}</label><select id="availability-${index}" name="day-${index}"><option value="0" ${state.availability[index] === 0 ? 'selected' : ''}>Unavailable</option><option value="60" ${state.availability[index] === 60 ? 'selected' : ''}>1 hour</option><option value="90" ${state.availability[index] === 90 ? 'selected' : ''}>1.5 hours</option><option value="120" ${state.availability[index] === 120 ? 'selected' : ''}>2 hours</option><option value="180" ${state.availability[index] === 180 ? 'selected' : ''}>3 hours</option></select></div>`).join('');
+  }
 function showToast(message) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -260,7 +302,7 @@ function importCSV(text) {
     const effortText = value('efforthours') || value('effort hours');
     const effort = Number(effortText || (type === 'exam' ? 5 : type === 'class' ? 0 : 2));
     if (type !== 'class' && (!Number.isFinite(effort) || effort < 0.5 || effort > 80)) throw new Error(`Row ${index + 2}: effortHours must be between 0.5 and 80.`);
-    return { id: id(), title: value('title'), course: value('course') || 'Course', type, date, startTime, endTime, effortHours: type === 'class' ? 0 : Math.max(0.5, effort) };
+    return { id: id(), title: value('title'), course: value('course') || 'Course', type, date, startTime, endTime, effortHours: type === 'class' ? 0 : Math.max(0.5, effort), calendarKey: `csv:${date}:${type}:${value('course')}:${value('title')}:${startTime}` };
   });
   if (!imported.length || imported.some(event => !event.title)) throw new Error('Each event needs a title.');
   commitImportedEvents(imported, 'CSV');
@@ -289,10 +331,7 @@ function splitOutsideQuotes(value, delimiter) {
   let quoted = false;
   for (let index = 0; index < value.length; index++) {
     if (value[index] === '"') quoted = !quoted;
-    else if (value[index] === delimiter && !quoted) {
-      parts.push(value.slice(start, index));
-      start = index + 1;
-    }
+    else if (value[index] === delimiter && !quoted) { parts.push(value.slice(start, index)); start = index + 1; }
   }
   parts.push(value.slice(start));
   return parts;
@@ -320,18 +359,12 @@ function parseICSProperty(line) {
   return { name: namePart.toUpperCase(), parameters, rawValue, value };
 }
 function localParts(date) {
-  return {
-    date: localDate(date),
-    time: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-  };
+  return { date: localDate(date), time: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` };
 }
 function zonedDateTime(parts, timeZone) {
   const target = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
   let timestamp = target;
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
-  });
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
   for (let attempt = 0; attempt < 3; attempt++) {
     const values = Object.fromEntries(formatter.formatToParts(new Date(timestamp)).map(part => [part.type, Number(part.value)]));
     timestamp += target - Date.UTC(values.year, values.month - 1, values.day, values.hour, values.minute, values.second);
@@ -549,6 +582,40 @@ document.getElementById('eventForm').addEventListener('submit', event => {
   generatePlan();
 });
 document.getElementById('availabilityButton').addEventListener('click', () => openDialog('availabilityDialog'));
+document.getElementById('settingsButton').addEventListener('click', () => openDialog('settingsDialog'));
+document.querySelectorAll('input[name="theme"]').forEach(input => input.addEventListener('change', event => {
+  state.theme = event.target.value;
+  applyTheme(state.theme);
+  saveStorage();
+}));
+for (const [id, color] of [['themeBackground', 'background'], ['themeAccent', 'accent']]) {
+  document.getElementById(id).addEventListener('input', event => {
+    state.themeColors[color] = event.target.value;
+    state.theme = 'custom';
+    applyTheme(state.theme);
+    saveStorage();
+  });
+}
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (state.theme === 'system') applyTheme(state.theme);
+});
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  installPrompt = event;
+  document.getElementById('installAppButton').hidden = false;
+});
+document.getElementById('installAppButton').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  document.getElementById('installAppButton').hidden = true;
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  document.getElementById('installAppButton').hidden = true;
+});
 document.getElementById('availabilityForm').addEventListener('submit', event => {
   event.preventDefault();
   state.availability = DAYS.map((_, index) => Number(new FormData(event.currentTarget).get(`day-${index}`)));
@@ -579,8 +646,9 @@ document.getElementById('calendarFile').addEventListener('change', async event =
     const text = await file.text();
     if (text.includes('BEGIN:VCALENDAR') || /\.(ics|ical)$/i.test(file.name)) commitImportedEvents(parseICS(text), 'calendar file');
     else importCSV(text);
+  } catch (error) {
+    showToast(error.message || 'Could not read that calendar file.');
   }
-  catch (error) { showToast(error.message || 'Could not read that calendar file.'); }
   event.target.value = '';
 });
 document.getElementById('feedForm').addEventListener('submit', async event => {
@@ -592,6 +660,8 @@ document.getElementById('feedForm').addEventListener('submit', async event => {
   catch (error) { showToast(error.message || 'Could not read the Canvas feed.'); }
   finally { button.disabled = false; button.textContent = 'Import link'; }
 });
-
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+}
 if (state.sessions.length === 0 && state.events.some(event => event.type !== 'class')) generatePlan();
 else render();

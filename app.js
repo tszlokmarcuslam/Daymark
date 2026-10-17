@@ -115,23 +115,23 @@ function applyTheme(theme) {
     const background = state.themeColors.background;
     const accent = state.themeColors.accent;
     const foreground = contrastText(background);
-    const eventSurface = mixHex(background, accent, 0.12);
-    const eventInk = contrastText(eventSurface);
-    const badgeSurface = mixHex(eventSurface, accent, 0.18);
+    const paper = accessibleSurface(mixHex(background, foreground, 0.06));
+    const event = accessibleSurface(mixHex(background, accent, 0.12));
+    const badge = accessibleSurface(mixHex(event.background, accent, 0.18));
     root.style.setProperty('--canvas', background);
-    root.style.setProperty('--paper', mixHex(background, foreground, 0.06));
+    root.style.setProperty('--paper', paper.background);
     root.style.setProperty('--line', mixHex(background, foreground, 0.16));
     root.style.setProperty('--ink', foreground);
     root.style.setProperty('--muted', mixHex(background, foreground, 0.72));
     root.style.setProperty('--green', accent);
     root.style.setProperty('--green-2', mixHex(accent, '#000000', 0.18));
     root.style.setProperty('--accent-ink', contrastText(accent));
-    root.style.setProperty('--event-surface', eventSurface);
-    root.style.setProperty('--event-ink', eventInk);
-    root.style.setProperty('--event-muted', mixHex(eventSurface, eventInk, 0.72));
-    root.style.setProperty('--event-border', mixHex(eventSurface, eventInk, 0.2));
-    root.style.setProperty('--event-badge-surface', badgeSurface);
-    root.style.setProperty('--event-badge-ink', contrastText(badgeSurface));
+    root.style.setProperty('--event-surface', event.background);
+    root.style.setProperty('--event-ink', event.foreground);
+    root.style.setProperty('--event-muted', event.foreground);
+    root.style.setProperty('--event-border', mixHex(event.background, event.foreground, 0.2));
+    root.style.setProperty('--event-badge-surface', badge.background);
+    root.style.setProperty('--event-badge-ink', badge.foreground);
   }
   document.querySelectorAll('input[name="theme"]').forEach(input => {
     input.checked = input.value === theme;
@@ -150,6 +150,20 @@ function contrastText(background) {
   const darkContrast = (luminance + 0.05) / (colorLuminance(dark) + 0.05);
   const lightContrast = 1.05 / (luminance + 0.05);
   return darkContrast >= lightContrast ? dark : '#ffffff';
+}
+function contrastRatio(first, second) {
+  const firstLuminance = colorLuminance(first);
+  const secondLuminance = colorLuminance(second);
+  return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05);
+}
+function accessibleSurface(background) {
+  let surface = background;
+  let foreground = contrastText(surface);
+  for (let attempt = 0; attempt < 32 && contrastRatio(foreground, surface) < 4.5; attempt++) {
+    surface = mixHex(surface, foreground === '#ffffff' ? '#000000' : '#ffffff', 0.08);
+    foreground = contrastText(surface);
+  }
+  return { background: surface, foreground };
 }
 function mixHex(first, second, amount) {
   const firstChannels = first.slice(1).match(/../g).map(value => parseInt(value, 16));
